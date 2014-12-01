@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:bxd="http://bxd.fi/xmldata/" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" targetNamespace="http://bxd.fi/xmldata/" elementFormDefault="qualified" attributeFormDefault="unqualified">
+    <xs:import namespace="http://www.w3.org/2000/09/xmldsig#" schemaLocation="xmldsig-core-schema.xsd"/>
+    <xs:element name="ApplicationRequest">
+        <xs:annotation>
+            <xs:documentation>Wrapper for data. Used for transmitting data. Can be XML Digital Signed.</xs:documentation>
+        </xs:annotation>
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="Content" type="xs:string"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+</xs:schema>
