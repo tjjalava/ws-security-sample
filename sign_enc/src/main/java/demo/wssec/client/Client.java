@@ -24,9 +24,11 @@ import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.lang.reflect.UndeclaredThrowableException;
 import java.net.URL;
+import java.security.KeyStore;
 import java.util.HashMap;
 import java.util.Map;
 
+import demo.wssec.common.Signutil;
 import fi.bxd.xmldata.ApplicationRequest;
 import org.apache.cxf.Bus;
 import org.apache.cxf.BusFactory;
@@ -38,8 +40,15 @@ import org.apache.cxf.hello_world_soap_http.types.Application;
 import org.apache.cxf.ws.security.wss4j.DefaultCryptoCoverageChecker;
 import org.apache.cxf.ws.security.wss4j.WSS4JInInterceptor;
 import org.apache.cxf.ws.security.wss4j.WSS4JOutInterceptor;
+import org.w3c.dom.Document;
 
 import javax.xml.bind.JAXBContext;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMResult;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
 
 /**
  * A DOM-based client
@@ -64,7 +73,7 @@ public final class Client {
             BusFactory.setDefaultBus(bus);
 
             Map<String, Object> outProps = new HashMap<String, Object>();
-            outProps.put("action", "UsernameToken Timestamp Signature Encrypt");
+            outProps.put("action", "Timestamp Signature");
 
             outProps.put("passwordType", "PasswordDigest");
 
@@ -73,13 +82,6 @@ public final class Client {
 
             outProps.put("passwordCallbackClass", "demo.wssec.client.UTPasswordCallback");
 
-            outProps.put("encryptionUser", "serverx509v1");
-            outProps.put("encryptionPropFile", "etc/Client_Encrypt.properties");
-            outProps.put("encryptionKeyIdentifier", "IssuerSerial");
-            outProps.put("encryptionParts",
-                         "{Element}{" + WSSE_NS + "}UsernameToken;"
-                         + "{Content}{http://schemas.xmlsoap.org/soap/envelope/}Body");
-
             outProps.put("signaturePropFile", "etc/Client_Sign.properties");
             outProps.put("signatureKeyIdentifier", "DirectReference");
             outProps.put("signatureParts",
@@ -87,25 +89,19 @@ public final class Client {
                          + "{Element}{http://schemas.xmlsoap.org/soap/envelope/}Body;"
                          + "{}{http://www.w3.org/2005/08/addressing}ReplyTo;");
 
-            outProps.put("encryptionKeyTransportAlgorithm", 
-                         "http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p");
             outProps.put("signatureAlgorithm", "http://www.w3.org/2000/09/xmldsig#rsa-sha1");
 
 
             Map<String, Object> inProps = new HashMap<String, Object>();
 
-            inProps.put("action", "UsernameToken Timestamp Signature Encrypt");
+            inProps.put("action", "Timestamp Signature");
             inProps.put("passwordType", "PasswordText");
             inProps.put("passwordCallbackClass", "demo.wssec.client.UTPasswordCallback");
 
-            inProps.put("decryptionPropFile", "etc/Client_Sign.properties");
-            inProps.put("encryptionKeyIdentifier", "IssuerSerial");
 
             inProps.put("signaturePropFile", "etc/Client_Encrypt.properties");
             inProps.put("signatureKeyIdentifier", "DirectReference");
 
-            inProps.put("encryptionKeyTransportAlgorithm", 
-                         "http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p");
             inProps.put("signatureAlgorithm", "http://www.w3.org/2000/09/xmldsig#rsa-sha1");
 
 
@@ -113,8 +109,9 @@ public final class Client {
             // and that the SOAP Body was encrypted
             DefaultCryptoCoverageChecker coverageChecker = new DefaultCryptoCoverageChecker();
             coverageChecker.setSignBody(true);
+            coverageChecker.setEncryptUsernameToken(false);
             coverageChecker.setSignTimestamp(true);
-            coverageChecker.setEncryptBody(true);
+            coverageChecker.setEncryptBody(false);
 
             GreeterService service = new GreeterService();
             Greeter port = service.getGreeterPort();
@@ -126,13 +123,28 @@ public final class Client {
 
             JAXBContext context = JAXBContext.newInstance(ApplicationRequest.class);
 
+            KeyStore keyStore = KeyStore.getInstance(KeyStore.getDefaultType());
+            keyStore.load(Client.class.getResourceAsStream("/keystore/nordea.jks"), null);
+
+            Signutil signutil = new Signutil(keyStore);
+            Transformer transformer = TransformerFactory.newInstance().newTransformer();
+            DocumentBuilderFactory documentBuilderFactory = DocumentBuilderFactory.newInstance();
+            documentBuilderFactory.setNamespaceAware(true);
+
             for (int i = 0; i < 4; i++) {
                 Application payload = new Application();
                 ApplicationRequest request = new ApplicationRequest();
                 request.setContent("This is content " + i);
 
+                Document doc = documentBuilderFactory.newDocumentBuilder().newDocument();
+                DOMResult result = new DOMResult(doc);
+                context.createMarshaller().marshal(request, result);
+                DOMResult signed = signutil.sign(result, "11111111", "WSNDEA1234");
+
+                System.out.println("Signature valid: " + signutil.validate(doc, "11111111"));
+
                 ByteArrayOutputStream out = new ByteArrayOutputStream();
-                context.createMarshaller().marshal(request, out);
+                transformer.transform(new DOMSource(signed.getNode().getFirstChild()), new StreamResult(out));
                 payload.setPayload(out.toByteArray());
 
                 Application response = port.sendPayload(payload);

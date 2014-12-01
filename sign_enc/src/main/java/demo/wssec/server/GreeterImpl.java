@@ -21,8 +21,14 @@ package demo.wssec.server;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.cert.CertificateException;
 import java.util.logging.Logger;
 
+import demo.wssec.common.Signutil;
 import fi.bxd.xmldata.ApplicationRequest;
 import org.apache.cxf.hello_world_soap_http.Greeter;
 import org.apache.cxf.hello_world_soap_http.types.Application;
@@ -33,6 +39,7 @@ import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
 import javax.xml.bind.Unmarshaller;
+import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMResult;
@@ -52,10 +59,21 @@ public class GreeterImpl implements Greeter {
     private JAXBContext context;
     private TransformerFactory transformerFactory;
 
+    Signutil signutil;
+    private final DocumentBuilderFactory documentBuilderFactory;
 
-    public GreeterImpl() throws JAXBException {
+
+    public GreeterImpl() throws Exception {
         context = JAXBContext.newInstance(ApplicationRequest.class);
         transformerFactory = TransformerFactory.newInstance();
+
+        KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
+        ks.load(getClass().getResourceAsStream("/keystore/nordea.jks"), null);
+
+        documentBuilderFactory = DocumentBuilderFactory.newInstance();
+        documentBuilderFactory.setNamespaceAware(true);
+
+        signutil = new Signutil(ks);
     }
     
     /* (non-Javadoc)
@@ -68,18 +86,15 @@ public class GreeterImpl implements Greeter {
         return "Hello " + me;
     }
 
-    private boolean validateSignature(Node doc) {
-        return true;
-    }
-
     @Override
     public Application sendPayload(Application in) {
         LOG.info("Executing operation sendPayload");
 
         try {
-            DOMResult result = new DOMResult();
+            Document doc = documentBuilderFactory.newDocumentBuilder().newDocument();
+            DOMResult result = new DOMResult(doc);
             transformerFactory.newTransformer().transform(new StreamSource(new ByteArrayInputStream(in.getPayload())), result);
-            System.out.println("Signature valid: " + validateSignature(result.getNode().getFirstChild()));
+            System.out.println("Signature valid: " + signutil.validate(doc,  "11111111"));
 
             Unmarshaller um = context.createUnmarshaller();
             ApplicationRequest request = (ApplicationRequest) um.unmarshal(result.getNode().getFirstChild());

@@ -50,7 +50,7 @@ public class Server {
         EndpointImpl endpoint = (EndpointImpl)Endpoint.publish(address, implementor);
         
         Map<String, Object> outProps = new HashMap<String, Object>();
-        outProps.put("action", "UsernameToken Timestamp Signature Encrypt");
+        outProps.put("action", "Timestamp Signature");
 
         outProps.put("passwordType", "PasswordText");
         outProps.put("passwordCallbackClass", "demo.wssec.server.UTPasswordCallback");
@@ -58,36 +58,22 @@ public class Server {
         outProps.put("user", "Alice");
         outProps.put("signatureUser", "serverx509v1");
 
-        outProps.put("encryptionUser", "clientx509v1");
-        outProps.put("encryptionPropFile", "etc/Server_SignVerf.properties");
-        outProps.put("encryptionKeyIdentifier", "IssuerSerial");
-        outProps.put("encryptionParts", "{Element}{" + WSSE_NS + "}UsernameToken;"
-                         + "{Content}{http://schemas.xmlsoap.org/soap/envelope/}Body");
-
         outProps.put("signaturePropFile", "etc/Server_Decrypt.properties");
         outProps.put("signatureKeyIdentifier", "DirectReference");
         outProps.put("signatureParts", "{Element}{" + WSU_NS + "}Timestamp;"
                          + "{Element}{http://schemas.xmlsoap.org/soap/envelope/}Body");
-
-        outProps.put("encryptionKeyTransportAlgorithm", 
-                         "http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p");
         outProps.put("signatureAlgorithm", "http://www.w3.org/2000/09/xmldsig#rsa-sha1");
 
         endpoint.getOutInterceptors().add(new WSS4JOutInterceptor(outProps));
 
         Map<String, Object> inProps = new HashMap<String, Object>();
 
-        inProps.put("action", "UsernameToken Timestamp Signature Encrypt");
+        inProps.put("action", "Timestamp Signature");
         inProps.put("passwordType", "PasswordDigest");
         inProps.put("passwordCallbackClass", "demo.wssec.server.UTPasswordCallback");
 
-        inProps.put("decryptionPropFile", "etc/Server_Decrypt.properties");
-        inProps.put("encryptionKeyIdentifier", "IssuerSerial");
-
         inProps.put("signaturePropFile", "etc/Server_SignVerf.properties");
         inProps.put("signatureKeyIdentifier", "DirectReference");
-        inProps.put("encryptionKeyTransportAlgorithm", 
-                    "http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p");
         inProps.put("signatureAlgorithm", "http://www.w3.org/2000/09/xmldsig#rsa-sha1");
 
         endpoint.getInInterceptors().add(new WSS4JInInterceptor(inProps));
@@ -95,9 +81,10 @@ public class Server {
         // Check to make sure that the SOAP Body and Timestamp were signed,
         // and that the SOAP Body was encrypted
         DefaultCryptoCoverageChecker coverageChecker = new DefaultCryptoCoverageChecker();
+        coverageChecker.setEncryptUsernameToken(false);
         coverageChecker.setSignBody(true);
         coverageChecker.setSignTimestamp(true);
-        coverageChecker.setEncryptBody(true);
+        coverageChecker.setEncryptBody(false);
         endpoint.getInInterceptors().add(coverageChecker);
 
     }
